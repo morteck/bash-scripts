@@ -1,0 +1,18 @@
+#!/bin/bash
+
+# Define your message
+message="Darby, I love you. You mean the world to me."
+
+# Create a custom shutdown script
+sudo tee /etc/init.d/custom_shutdown_message <<EOF
+#!/bin/bash
+# Display the love message before shutting down
+echo "$message"
+EOF
+
+# Make the script executable
+sudo chmod +x /etc/init.d/custom_shutdown_message
+
+# Create symbolic links to run the script before shutdown
+sudo ln -s /etc/init.d/custom_shutdown_message /etc/rc0.d/K01custom_shutdown_message
+sudo ln -s /etc/init.d/custom_shutdown_message /etc/rc6.d/K01custom_shutdown_message
