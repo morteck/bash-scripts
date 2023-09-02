@@ -1,0 +1,15 @@
+#!/bin/bash
+
+# SSH server information
+server_ip="your_server_ip"
+ssh_port="your_ssh_port"
+ssh_user="your_ssh_username"
+
+# SSH private key file
+private_key="path/to/your/private/key"
+
+# Remote command to execute (optional)
+remote_command="echo 'Hello, SSH automation!'"
+
+# SSH connection
+ssh -i "$private_key" -p "$ssh_port" "$ssh_user@$server_ip" "$remote_command"
