@@ -1,4 +1,7 @@
 #!/bin/bash
+# This script is part of the Bash-Scripts project.
+# Licensed under the GNU GPLv3. See LICENSE file for details.
+
 
 # Check if the script is run as root
 if [ "$EUID" -ne 0 ]; then
