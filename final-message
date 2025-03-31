@@ -1,8 +1,13 @@
 #!/bin/bash
-# Message to print during shutdown
+# This script is part of the Bash-Scripts project.
+# Licensed under the GNU GPLv3. See LICENSE file for details.
+# Message to print during final shutdown
 
 message="Darby, I love you for all that you were, all that you are, and everything I hope you know yourself to become. You mean the world to me, and the first time I truly said 'Hello World' was the day you braved a hike with me 
-and gave me the best memories I could never ask for. You are my world and placed right in the center of my universe. Thank you... for everything. -M"
+and gave me the best memories I could never ask for. You are my world and placed right in the center of my universe. Thank you... for everything. Most importantly... thank you for having me along your path. It's been the honor of my lifetime. 
+
+Eternally yours, 
+-M"
 
 # Create custom shutdown script
 
