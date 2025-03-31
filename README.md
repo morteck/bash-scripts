@@ -1,6 +1,4 @@
-# bash-scripts
-
-🐚 Bash Scripts
+# bash-scripts 
 
 A curated collection of practical Bash scripts I've written for automation, system maintenance, network diagnostics, and general Linux productivity. These scripts are tools I use in real-world environments — either in my homelab, client systems, or cybersecurity research.
 
@@ -18,7 +16,7 @@ Scripts are organized by purpose, with descriptive filenames and comments inside
 
     firewall_rules.sh – applies a secure UFW or iptables profile
 
-🚀 Getting Started
+ Getting Started
 
 Clone the repo:
 
@@ -35,7 +33,7 @@ Run it:
 
     ⚠️ Note: These scripts assume a Linux environment and may require root privileges depending on the task.
 
-🛠️ Dependencies
+🛠 Dependencies
 
 Some scripts may rely on common CLI tools like:
 
