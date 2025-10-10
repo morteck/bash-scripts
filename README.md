@@ -47,11 +47,3 @@ Some scripts may rely on common CLI tools like:
 
     net-tools / iproute2
 
-At some point in time I'll add a note to the top of each script for a reference on dependencies.
-
-
-📜 License
-
-Because... why not. 
-
-This repo is licensed under the MIT License. You're free to use, modify, and share — just don't sell it as-is.
