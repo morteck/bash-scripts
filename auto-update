@@ -1,20 +1,23 @@
 #!/bin/bash
-# This script is part of the Bash-Scripts project.
-# Licensed under the GNU GPLv3. See LICENSE file for details.
+# System Update Script
+# --------------------
+# This Bash script updates and upgrades all installed packages on a Debian-based system.
+# It also removes obsolete dependencies and cleans up the local package cache.
+# Designed for administrators who want a quick, reliable way to perform system maintenance.
 
-# Check if the script is run as root
+
+# === Privilege Check ===
 if [ "$EUID" -ne 0 ]; then
-  echo "Please run this script as root."
-  exit 1
+    echo "Error: Please run this script as root." >&2
+    exit 1
 fi
 
-# Update the package list and upgrade installed packages
-apt update
-apt upgrade -y
+# === System Update & Maintenance ===
+echo "=== Starting System Update ==="
+apt update && apt upgrade -y
 
-# Clean up unnecessary packages
-apt autoremove -y
-apt clean
+echo "=== Cleaning Up Unused Packages ==="
+apt autoremove -y && apt clean
 
-# Display a message indicating the update process is complete
-echo "System updates completed."
+# === Completion Message ===
+echo "✅ System updates completed successfully."
