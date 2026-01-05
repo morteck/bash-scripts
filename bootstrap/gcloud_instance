@@ -1,0 +1,163 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# GCE Startup Bootstrap
+# Written by Mikael Todd - Github: https://github.com/morteck
+
+LOG_FILE="/var/log/gce-startup-bootstrap.log"
+exec > >(tee -a "$LOG_FILE" | logger -t gce-startup-bootstrap) 2>&1
+
+echo "=== $(date -Is) | Starting GCE startup bootstrap ==="
+
+# ---- config knobs (edit as needed) ----
+ADMIN_USER="adminuser"
+ALLOW_SSH_PASSWORD_AUTH="no"         # "yes" only if you *really* need it temporarily
+ALLOW_ROOT_LOGIN="no"               # keep "no"
+INSTALL_DOCKER="no"                 # set to "yes" if you want docker on this VM
+UFW_OPEN_PORTS=("OpenSSH")          # add e.g. "80/tcp" "443/tcp" "51820/udp"
+MARKER_FILE="/var/lib/gce-startup-bootstrap.done"
+FORCE_RERUN="${FORCE_RERUN:-0}"      # set metadata env or export before run if testing
+
+# ---- helper funcs ----
+have_cmd() { command -v "$1" >/dev/null 2>&1; }
+
+wait_for_apt() {
+  # Avoid dpkg/apt lock fights during early boot
+  local i=0
+  while fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || fuser /var/lib/apt/lists/lock >/dev/null 2>&1; do
+    i=$((i+1))
+    if (( i > 60 )); then
+      echo "APT locks held too long; continuing anyway."
+      break
+    fi
+    echo "Waiting for apt/dpkg locks..."
+    sleep 2
+  done
+}
+
+# ---- idempotency gate ----
+if [[ -f "$MARKER_FILE" && "$FORCE_RERUN" != "1" ]]; then
+  echo "Marker exists ($MARKER_FILE). Skipping (set FORCE_RERUN=1 to override)."
+  exit 0
+fi
+
+# ---- baseline dirs ----
+mkdir -p /etc/adminuser/bootstrap /var/lib
+chmod 0755 /etc/adminuser /etc/adminuser/bootstrap
+
+# ---- package setup ----
+export DEBIAN_FRONTEND=noninteractive
+wait_for_apt
+
+if have_cmd apt-get; then
+  apt-get update -y
+  # Keep upgrades sane in startup scripts: avoid dist-upgrade unless you truly need it
+  apt-get upgrade -y
+  apt-get install -y \
+    ca-certificates curl wget gnupg lsb-release \
+    ufw fail2ban unattended-upgrades \
+    vim-tiny nano tmux git jq htop
+else
+  echo "apt-get not found. This script targets Debian/Ubuntu images."
+  exit 1
+fi
+
+# ---- user + sudo ----
+if ! id "$ADMIN_USER" >/dev/null 2>&1; then
+  useradd -m -s /bin/bash "$ADMIN_USER"
+  echo "Created user: $ADMIN_USER"
+fi
+
+# Sudo group name differs sometimes; Ubuntu/Debian use 'sudo'
+if getent group sudo >/dev/null 2>&1; then
+  usermod -aG sudo "$ADMIN_USER"
+fi
+
+# Lock password auth for the user by default (SSH keys are better)
+passwd -l "$ADMIN_USER" >/dev/null 2>&1 || true
+
+# ---- optional: inject an SSH public key from instance metadata ----
+# Set a custom metadata key named: adminuser_ssh_pubkey
+# Value example: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAI... yourkeycomment"
+META_URL="http://metadata.google.internal/computeMetadata/v1/instance/attributes/adminuser_ssh_pubkey"
+PUBKEY="$(curl -fsS -H 'Metadata-Flavor: Google' "$META_URL" || true)"
+if [[ -n "${PUBKEY:-}" ]]; then
+  install -d -m 0700 -o "$ADMIN_USER" -g "$ADMIN_USER" "/home/$ADMIN_USER/.ssh"
+  AUTH_KEYS="/home/$ADMIN_USER/.ssh/authorized_keys"
+  touch "$AUTH_KEYS"
+  chown "$ADMIN_USER:$ADMIN_USER" "$AUTH_KEYS"
+  chmod 0600 "$AUTH_KEYS"
+  if ! grep -Fq "$PUBKEY" "$AUTH_KEYS"; then
+    echo "$PUBKEY" >> "$AUTH_KEYS"
+    echo "Injected SSH key into $AUTH_KEYS from instance metadata."
+  else
+    echo "SSH key already present in $AUTH_KEYS."
+  fi
+else
+  echo "No adminuser_ssh_pubkey metadata found; skipping key injection."
+fi
+
+# ---- SSH hardening (safe defaults) ----
+SSHD_CFG="/etc/ssh/sshd_config.d/90-adminuser-hardening.conf"
+cat > "$SSHD_CFG" <<EOF
+# Managed by github.com/morteck (GCE startup script)
+PasswordAuthentication ${ALLOW_SSH_PASSWORD_AUTH}
+PermitRootLogin ${ALLOW_ROOT_LOGIN}
+KbdInteractiveAuthentication no
+X11Forwarding no
+MaxAuthTries 4
+ClientAliveInterval 300
+ClientAliveCountMax 2
+EOF
+
+# Reload sshd safely
+systemctl reload ssh 2>/dev/null || systemctl reload sshd 2>/dev/null || true
+
+# ---- firewall (UFW) ----
+ufw --force reset
+ufw default deny incoming
+ufw default allow outgoing
+for rule in "${UFW_OPEN_PORTS[@]}"; do
+  ufw allow "$rule"
+done
+ufw --force enable
+ufw status verbose || true
+
+# ---- Fail2Ban ----
+JAIL_LOCAL="/etc/fail2ban/jail.d/sshd.local"
+cat > "$JAIL_LOCAL" <<'EOF'
+[sshd]
+enabled = true
+bantime  = 1h
+findtime = 10m
+maxretry = 5
+EOF
+systemctl enable --now fail2ban
+fail2ban-client status sshd || true
+
+# ---- unattended upgrades ----
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
+systemctl enable --now unattended-upgrades || true
+
+# ---- optional Docker install (simple path) ----
+if [[ "$INSTALL_DOCKER" == "yes" ]]; then
+  echo "Installing Docker..."
+  apt-get install -y docker.io
+  systemctl enable --now docker
+  usermod -aG docker "$ADMIN_USER" || true
+fi
+
+# ---- nice-to-have: drop a fingerprint file ----
+cat > /etc/adminuser/bootstrap/README.txt <<EOF
+This VM was bootstrapped by a GCE startup script.
+Log: $LOG_FILE
+Marker: $MARKER_FILE
+EOF
+
+touch "$MARKER_FILE"
+chmod 0644 "$MARKER_FILE"
+
+echo "=== $(date -Is) | Bootstrap complete ==="
