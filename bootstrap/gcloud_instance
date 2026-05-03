@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
 # GCE Startup Bootstrap
 # Written by Mikael Todd - Github: https://github.com/morteck
+
+set -euo pipefail
 
 LOG_FILE="/var/log/gce-startup-bootstrap.log"
 exec > >(tee -a "$LOG_FILE" | logger -t gce-startup-bootstrap) 2>&1
